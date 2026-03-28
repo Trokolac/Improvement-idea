@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Statistics - BizLink</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-light">
+
+<!-- NAVBAR -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container">
+    <!-- Brand -->
+    <a class="navbar-brand fw-bold" href="#">
+      Made by Nemanja Stankovic
+    </a>
+
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav ms-auto">
+
+        <li class="nav-item">
+          <a class="nav-link" href="index.html">RFQ offer generator</a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link active" href="statistics.html">Statistics</a>
+        </li>
+
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<header class="bg-primary text-white p-3 mb-4">
+  <div class="container d-flex align-items-center">
+    <img src="https://cdn.prod.website-files.com/68873ec3e7090541febdff58/688b1d832cb57ad5bb1cc466_image%202%20(1).avif" alt="Logo" style="height:40px; margin-right:10px;">
+    <h6 class="mb-0">        
+      This tool is just for refference and showcasing the system wide possibility, not intended for actual use
+    </h6>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="row" id="cards"></div>
+
+</div>
+
+<footer class="bg-dark text-white text-center py-2 mt-4">
+  <div class="container">
+    &copy; 2026 BizLink Statistics overview
+  </div>
+</footer>
+
+<script>
+
+const API_URL = "https://script.google.com/macros/s/AKfycbw0qTjYr1VPcnzofzQcRJq3fg2fwi4swOVOERjVAkoHE-a3iQfgK5HcWv23PdDSr2km/exec?mode=statistics";
+
+// LOAD DATA
+async function loadData() {
+  try {
+    const res = await fetch(API_URL);
+    const data = await res.json();
+
+    if (!data || data.length === 0) {
+      document.getElementById("cards").innerHTML = "<div class='alert alert-warning'>No data available</div>";
+      return;
+    }
+
+    buildStats(data);
+  } catch (err) {
+    console.error(err);
+    document.getElementById("cards").innerHTML = "<div class='alert alert-danger'>Error loading data</div>";
+  }
+}
+
+// PROCESS DATA
+function buildStats(data) {
+
+  let customers = {};
+
+  data.forEach(row => {
+
+    let cust = row.customer_name;
+    if (!cust) return;
+
+    if (!customers[cust]) {
+      customers[cust] = {
+        rfqs: new Set(),
+        pns: new Set(),
+        total: 0
+      };
+    }
+
+    customers[cust].rfqs.add(row.rfq_no);
+    customers[cust].pns.add(row.customer_pn);
+
+    let price = Number(row.price) || 0;
+    let qty = Number(row.qty) || 0;
+
+    customers[cust].total += price * qty;
+  });
+
+  renderCards(customers);
+}
+
+// RENDER CARDS
+function renderCards(customers) {
+
+  let html = "";
+
+  Object.keys(customers).forEach(cust => {
+
+    let c = customers[cust];
+
+    html += `
+      <div class="col-md-4 mb-4">
+        <div class="card shadow h-100">
+          <div class="card-body">
+
+            <h5 class="card-title fw-bold">${cust}</h5>
+
+            <table class="table table-sm mb-0">
+              <tr>
+                <td><b>RFQ Count</b></td>
+                <td>${c.rfqs.size}</td>
+              </tr>
+              <tr>
+                <td><b>Product Count</b></td>
+                <td>${c.pns.size}</td>
+              </tr>
+              <tr>
+                <td><b>Total Value</b></td>
+                <td>€${c.total.toFixed(2)}</td>
+              </tr>
+            </table>
+
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  document.getElementById("cards").innerHTML = html;
+}
+
+// INIT
+loadData();
+
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>

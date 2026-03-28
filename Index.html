@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>BizLink Assistant</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    @media print {
+
+      /* sakrij inpute i dugmad */
+      input, label, button {
+        display: none !important;
+      }
+
+      /* sakrij tabele (BOM detalji) */
+      table {
+        display: none !important;
+      }
+
+      /* sakrij BOM total */
+      .bom-total {
+        display: none !important;
+      }
+
+      /* sakrij strelice */
+      .accordion-button::after {
+        display: none !important;
+      }
+
+      .container {
+        width: 100% !important;
+      }
+
+    }
+  </style>
+
+</head>
+
+<body class="bg-light">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container">
+
+    <!-- Brand -->
+    <a class="navbar-brand fw-bold" href="#">
+      Made by Nemanja Stankovic
+    </a>
+
+
+    <!-- Mobile toggle -->
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+      <span class="navbar-toggler-icon">
+      </span>
+    </button>
+
+    <!-- Links -->
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav ms-auto">
+
+        <li class="nav-item">
+          <a class="nav-link active" href="Index.html">RFQ offer generator</a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link" href="statistics.html">Statistics</a>
+        </li>
+
+      </ul>
+    </div>
+
+  </div>
+</nav>
+<header class="bg-primary text-white p-3 mb-4">
+  <div class="container d-flex align-items-center">
+    <img src="https://cdn.prod.website-files.com/68873ec3e7090541febdff58/688b1d832cb57ad5bb1cc466_image%202%20(1).avif" alt="Logo" style="height:40px; margin-right:10px;">
+    <h6 class="mb-0">        
+      This tool is just for refference and showcasing the system wide possibility, not intended for actual use
+    </h6>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- SEARCH -->
+  <div class="row mb-3">
+    <div class="col-md-4">
+      <div class="input-group">
+        <input type="text" id="search" class="form-control" placeholder="Enter RFQ No">
+        <button class="btn btn-primary" onclick="searchSAP()">Search</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRINT -->
+  <div class="text-end mb-3">
+    <button class="btn btn-success" onclick="printPDF()">Export to PDF</button>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results"></div>
+
+</div>
+
+<footer class="bg-dark text-white text-center py-2 mt-4">
+  <div class="container">
+    &copy; 2026 BizLink Offer and BOM generator
+  </div>
+</footer>
+
+<script>
+
+const API_URL = "https://script.google.com/macros/s/AKfycbw0qTjYr1VPcnzofzQcRJq3fg2fwi4swOVOERjVAkoHE-a3iQfgK5HcWv23PdDSr2km/exec";
+
+let allData = [];
+
+// SEARCH
+async function searchSAP() {
+  const rfq = document.getElementById("search").value;
+
+  if (!rfq) {
+    alert("Unesi RFQ broj");
+    return;
+  }
+
+  const res = await fetch(`${API_URL}?rfq=${rfq}`);
+  const data = await res.json();
+
+  allData = data;
+
+  renderCustomerPN(data);
+}
+
+// GROUP BY CUSTOMER PN
+function renderCustomerPN(data) {
+
+  let grouped = {};
+
+  data.forEach(row => {
+    if (!grouped[row.customer_pn]) {
+      grouped[row.customer_pn] = [];
+    }
+    grouped[row.customer_pn].push(row);
+  });
+
+  let html = "<div class='accordion' id='pnAccordion'>";
+
+  Object.keys(grouped).forEach((pn, index) => {
+
+    html += `
+    <div class="accordion-item">
+      <h2 class="accordion-header">
+        <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#pn${index}">
+           <b>Customer PN: ${pn}</b>
+        </button>
+      </h2>
+
+      <div id="pn${index}" class="accordion-collapse collapse">
+        <div class="accordion-body">
+
+          <div class="row mb-3">
+
+            <div class="col-md-3">
+              <label>Quantity:</label>
+              <input type="number" class="form-control"
+                onchange="updateTotal(${index})"
+                id="qty${index}" placeholder="e.g. 1000">
+            </div>
+
+            <div class="col-md-3">
+              <label>ROI (%):</label>
+              <input type="number" class="form-control"
+                onchange="updateTotal(${index})"
+                id="roi${index}" placeholder="e.g. 20">
+            </div>
+
+          </div>
+
+          <div id="grandTotal${index}" class="alert alert-primary">
+            Total Price: €0.00
+          </div>
+
+          ${renderSemiPN(grouped[pn], index)}
+
+        </div>
+      </div>
+    </div>
+    `;
+  });
+
+  html += "</div>";
+
+  document.getElementById("results").innerHTML = html;
+}
+
+// GROUP BY SEMI PN
+function renderSemiPN(data, parentIndex) {
+
+  let grouped = {};
+
+  data.forEach(row => {
+    let key = row.customer_semi_pn;
+
+    if (!key || key === "/" || key === "TBD") {
+      key = "NO_SEMI";
+    }
+
+    if (!grouped[key]) {
+      grouped[key] = [];
+    }
+    grouped[key].push(row);
+  });
+
+  const keys = Object.keys(grouped);
+
+  if (keys.length === 1 && keys[0] === "NO_SEMI") {
+    return renderMaterials(grouped["NO_SEMI"]);
+  }
+
+  let html = "<div class='accordion' id='semiAccordion" + parentIndex + "'>";
+
+  keys.forEach((semi, index) => {
+
+    let displayName = (semi === "NO_SEMI") ? "No Semi PN" : semi;
+
+    html += `
+    <div class="accordion-item">
+      <h2 class="accordion-header">
+        <button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#semi${parentIndex}${index}">
+          Semi PN: ${displayName}
+        </button>
+      </h2>
+
+      <div id="semi${parentIndex}${index}" class="accordion-collapse collapse">
+        <div class="accordion-body">
+          ${renderMaterials(grouped[semi])}
+        </div>
+      </div>
+    </div>
+    `;
+  });
+
+  html += "</div>";
+
+  return html;
+}
+
+// MATERIAL TABLE
+function renderMaterials(data) {
+
+  let total = 0;
+
+  let html = `
+  <table class="table table-bordered table-sm">
+    <thead class="table-dark">
+      <tr>
+        <th>Designator</th>
+        <th>Material Type</th>
+        <th>Customer Mat No</th>
+        <th>SAP No</th>
+        <th>Description</th>
+        <th>Qty</th>
+        <th>Unit</th>
+        <th>Lead Time</th>
+        <th>Price (€)</th>
+        <th>Supplier</th>
+      </tr>
+    </thead>
+    <tbody>
+  `;
+
+  data.forEach(row => {
+    let price = Number(row.price);
+    let qty = Number(row.qty);
+
+    if (isNaN(price)) price = 0;
+    if (isNaN(qty)) qty = 0;
+
+    total += price * qty;
+
+    html += `
+    <tr>
+      <td>${row.designator}</td>
+      <td>${row.material_type}</td>
+      <td>${row.customer_mat_no}</td>
+      <td>${row.sap_no}</td>
+      <td>${row.description}</td>
+      <td>${qty}</td>
+      <td>${row.unit}</td>
+      <td>${row.lead_time}</td>
+      <td>€${price.toFixed(2)}</td>
+      <td>${row.supplier}</td>
+    </tr>
+    `;
+  });
+
+  html += `
+    </tbody>
+  </table>
+
+  <div class="alert alert-success bom-total">
+    BOM Total: €${total.toFixed(2)}
+  </div>
+  `;
+
+  return html;
+}
+
+// CALCULATION
+function updateTotal(index) {
+
+  const qtyInput = Number(document.getElementById(`qty${index}`).value) || 0;
+  const roiInput = Number(document.getElementById(`roi${index}`).value) || 0;
+
+  let pnData = Object.values(groupByPN(allData))[index];
+
+  let bomTotal = 0;
+
+  pnData.forEach(row => {
+    let price = Number(String(row.price).replace(/[^\d.-]/g, ""));
+    let q = Number(row.qty);
+
+    if (isNaN(price)) price = 0;
+    if (isNaN(q)) q = 0;
+
+    bomTotal += price * q;
+  });
+
+  let baseTotal = bomTotal * qtyInput;
+  let finalTotal = baseTotal * (1 + roiInput / 100);
+
+  document.getElementById(`grandTotal${index}`).innerHTML = `
+    <h5>${pnData[0].customer_pn}</h5>
+    <b>Total Price:</b> €${finalTotal.toFixed(2)}
+  `;
+}
+
+// GROUP HELPER
+function groupByPN(data) {
+  let grouped = {};
+
+  data.forEach(row => {
+    if (!grouped[row.customer_pn]) {
+      grouped[row.customer_pn] = [];
+    }
+    grouped[row.customer_pn].push(row);
+  });
+
+  return grouped;
+}
+
+// PRINT
+function printPDF() {
+  window.print();
+}
+
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>
